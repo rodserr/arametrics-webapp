@@ -37,7 +37,7 @@ freq2 <- freq %>%
             claimN = ClaimNb
   )
 
-## severity
+## frequency
 
 ##poisson
 summary(model.frequency_p <-glm(claimN ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
@@ -47,7 +47,7 @@ with(model.frequency_p, cbind(res.deviance = deviance, df =
                                 df.residual, p = pchisq(deviance, df.residual, lower.tail = FALSE))) ##prueba de pearson
 
 ##negative binomial
-summary(model.frequency_nb <-glm.nb(claimN ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
+summary(model.frequency_nb <-MASS::glm.nb(claimN ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
                                       vehGas + density + region,
                                     data=freq2)) ## aplicamos binomial negativa
 
