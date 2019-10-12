@@ -57,6 +57,9 @@ pchisq(2*(logLik(model.frequency_nb)-logLik(model.frequency_p)),
 with(model.frequency_nb, cbind(res.deviance = deviance, df =
                                  df.residual, p = pchisq(deviance, df.residual, lower.tail = FALSE))) ##prueba de pearson 
 
+## possion better than bn
+
+
 ## severity
 s <- 10000
 sev2 <- left_join(sev, freq2, by = 'IDpol') %>% 
