@@ -1,4 +1,3 @@
-# Libraries----
 library(tidyverse)
 library(lubridate)
 library(naniar)
@@ -36,41 +35,29 @@ freq2 <- freq %>%
             vehBrand = VehBrand,
             exposure = Exposure,
             claimN = ClaimNb
-            )
+  )
 
-# Frequency Model----
-# Split Learn-Test
-set.seed(100)
-ll <- sample(c(1:nrow(freq2)), round(0.9*nrow(freq2)), replace = FALSE)
-learn <- freq2[ll,]
-test <- freq2[-ll,]
-(n_l <- nrow(learn))
-(n_t <- nrow(test))
+## severity
 
-glm1 <- glm(claimN ~ vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
-              vehGas + density + region, 
-            data = learn, offset = log(exposure), family = poisson())
+##poisson
+summary(model.frequency_p <-glm(claimN ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
+                                  vehGas + density + region,
+                                data=freq2, family=poisson)) 
+with(model.frequency_p, cbind(res.deviance = deviance, df =
+                                df.residual, p = pchisq(deviance, df.residual, lower.tail = FALSE))) ##prueba de pearson
 
-summary(glm1)
+##negative binomial
+summary(model.frequency_nb <-glm.nb(claimN ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
+                                      vehGas + density + region,
+                                    data=freq2)) ## aplicamos binomial negativa
 
-# Evaluate
-Poisson.Deviance <- function(pred, obs){
-  2*(sum(pred)-sum(obs)+sum(log((obs/pred)^(obs))))/length(pred)
-}
+pchisq(2*(logLik(model.frequency_nb)-logLik(model.frequency_p)),
+       df=1, lower.tail= FALSE)
 
-Gamma.Deviance <- function(pred, obs){
-  2*((sum(pred)-sum(obs)/sum(obs))-sum(log((obs/pred)^(obs))))/length(pred)
-}
+with(model.frequency_nb, cbind(res.deviance = deviance, df =
+                                 df.residual, p = pchisq(deviance, df.residual, lower.tail = FALSE))) ##prueba de pearson 
 
-
-learn$fitGLM <- fitted(glm1)
-test$fitGLM <- predict(glm1, newdata=test, type="response")
-
-# in-sample and out-of-sample losses (in 10^(-2))
-(insampleGLM <- 100*Poisson.Deviance(learn$fitGLM, learn$claimN))
-100*Poisson.Deviance(test$fitGLM, test$claimN)
-
-# Severity Model----
+## severity
 s <- 10000
 sev2 <- left_join(sev, freq2, by = 'IDpol') %>% 
   mutate(standard = as.factor(ClaimAmount < s)) %>% 
@@ -82,39 +69,35 @@ learn_s <- sev2[ll_s,]
 test_s <- sev2[-ll_s,]
 (n_l_s <- nrow(learn_s))
 (n_t_s <- nrow(test_s))
-
-logReg <- glm(standard ~ drivAge, data = learn_s, family = binomial)
-summary(logReg)
-x <- predict(logReg, learn_s, type = "response")
-pred <- prediction(x, learn_s$standard)
-perf <- performance(pred,"tpr","fpr")
-plot(perf,colorize=TRUE)
-
-confusionMatrix(data = ifelse(x < 0.982, T, F) %>% as.factor(),
-                reference = learn_s$standard)
-
 indx_sev <- which(learn_s$standard == T)
-gam1 <- glm(ClaimAmount ~ drivAge + density, data = learn_s[indx_sev,],
-            family = Gamma(link = "log"))
 
-gam2 <- glm(ClaimAmount ~ drivAge + density, data = learn_s[-indx_sev,],
-            family = Gamma(link = "log"))
+##log gamma
+summary(model.severity_g <- glm(ClaimAmount ~vehPower + vehAge + drivAge + bonusMalus + vehBrand + 
+                                  vehGas + density + region,
+                                data=learn_s[indx_sev,], family = Gamma("log"))) ##aplicamos modelo gamma con link = log
 
-summary(gam1)
-summary(gam2)
 
-A <- predict(gam1, newdata = test_s, type = "response")
-B <- predict(gam2, newdata = test_s, type = "response")
-C <- predict(logReg, newdata = test_s, type = "response")
+##relativities
+rel <- data.frame(rating.factor =
+                    c(rep("Vehicle Power", nlevels(freq2$vehPower)), rep("Vehicle Age",
+                                                                         nlevels(freq2$vehAge)),
+                      rep("Divers Age", nlevels(freq2$drivAge)), rep("Bonus Malus", nlevels(freq2$bonusMalus)),
+                      rep("Vehicle Brand", nlevels(freq2$vehBrand)), rep("Vehicle Gas", nlevels(freq2$vehGas)),
+                      rep("Density", nlevels(freq2$density)), rep("Region", nlevels(freq2$region))),
+                  class = c(levels(freq2$vehPower),levels(freq2$vehAge), levels(freq2$drivAge),
+                            levels(freq2$bonusMalus), levels(freq2$vehBrand), levels(freq2$vehGas),
+                            levels(freq2$density), levels(freq2$region)),
+                  stringsAsFactors = FALSE)
 
-sev_test <- A*C+B*(1-C)
+print(rel)
 
-eval <- cbind(claimA = test_s$ClaimAmount, sev_test) %>% as.data.frame()
-  
 
-learn_s$fitGLM <- fitted(glm1)
-test$fitGLM <- predict(glm1, newdata=test, type="response")
-
-# in-sample and out-of-sample losses (in 10^(-2))
-(insampleGLM <- 100*Poisson.Deviance(learn$fitGLM, learn$claimN))
-100*Poisson.Deviance(test$fitGLM, test$claimN)
+rels <- coef(model.frequency_p)
+rels <- exp( rels[1] + rels[-1] ) / exp( rels[1] )
+rel$rels.frequency <- c(c(1, rels[1:5]), c(rels[6], 1, rels[7]), c(rels[8:11], 1, rels[12:13]),
+                        c(rels[14]), c(rels[15:24]), c(1, rels[25]), c(rels[26]), c(rels[27:47]))
+rels <- coef(model.severity_g)
+rels <- exp(rels[1] + rels[-1])/exp(rels[1])
+rel$rels.severity <- c(c(1, rels[1:5]), c(rels[6], 1, rels[7]), c(rels[8:11], 1, rels[12:13]),
+                       c(rels[14]), c(rels[15:24]), c(1, rels[25]), c(rels[26]), c(rels[27:47]))
+rel$rels.pure.premium <- with(rel, rels.frequency * rels.severity)
