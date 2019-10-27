@@ -47,7 +47,8 @@ vehGas_choices <- unique(TPL_claims$vehGas)
 vehAge_choices <- unique(TPL_claims$vehAge)
 vehBrand_choices <- unique(TPL_claims$vehBrand)
 
-helpText_TPL <- 'Este modulo muestra el performance de una cartera de Resposabilidad Civil Vehículos \n
+helpText_TPL <- 'Este modulo muestra el performance de una cartera de Resposabilidad Civil Vehículos <br>
+<br>
 Despliega gráficos descriptivos con la opción de cambiar la variable a estudiar y muestra indicadores en base a los 
 inputs seleccionados <br>
 <br>
