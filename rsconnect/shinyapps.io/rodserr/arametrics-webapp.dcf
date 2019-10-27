@@ -1,0 +1,12 @@
+name: arametrics-webapp
+title: arametrics-webapp
+username:
+account: rodserr
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1382497
+bundleId: 2537189
+url: https://rodserr.shinyapps.io/arametrics-webapp/
+when: 1572048456.57695
+asMultiple: FALSE
+asStatic: FALSE
