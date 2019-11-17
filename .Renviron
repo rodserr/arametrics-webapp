@@ -1,0 +1,8 @@
+app_name = "arametrics-webapp"
+api_key = "w0cqbeQLCx1RS4rSYnRKVtigZ"
+api_secret_key = "t83LthPm1KbBS6nEsIuSFC0xIW8cYyCQPwGxEq3P5CePTCXUwV"
+access_token = "157520630-1EJTeQMQwPTa2XfVNJpHQOAswCVV55CAW5F10E9q"
+access_token_secret = "CrX3JKGbYPMibezUgOSEg4YPIAaTjSLZdEb8xWyooIpRs"
+
+darksky_api_key = "c43f39df779150bbf85effe69ebc32e9"
+TWITTER_PAT=/home/marines/.rtweet_token27.rds
