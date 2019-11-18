@@ -1,6 +1,7 @@
 # Libraries----
 library(shiny)
 library(shinydashboard)
+library(shinydashboardPlus)
 library(shinycssloaders)
 library(shinyWidgets)
 library(highcharter)
@@ -12,8 +13,14 @@ library(DT)
 library(zoo)
 library(xts)
 library(forecast)
+library(ChainLadder)
+library(plotly)
+library(jsonlite)
+library(rtweet)
 
 # Data----
+    # Docs----
+doc <- read_file('data/docu.txt')
     # TPL----
 french_map <- jsonlite::fromJSON('data/french-motor-TPL/fr-all.geo.json', simplifyVector = F)
 map_division <- read_csv('data/french-motor-TPL/departments.csv')
@@ -75,6 +82,36 @@ se realiza el forecast en la data de prueba, se muestra también un cuadro compa
 <br>
 Finalmente se pronostica en función al modelo seleccionado'
 
+    # IBNR----
+data('MW2014')
+
+.aux <- tibble(year = c(rep(2015, 4), rep(2016, 4), rep(2017, 4), rep(2018, 4), 2019),
+               q = c(rep(1:4, 4), 1),
+               aux = as.character(seq(1, 17))) %>% 
+    transmute(origin_aux = paste0(year, '0', q), aux)
+
+.df <- as.data.frame(MW2014, na.rm = T)
+
+ibnr_tri <- left_join(.df, .aux, by = c('origin' = 'aux')) %>% 
+    transmute(origin = origin_aux, dev, value) %>% 
+    as.triangle()
+
+    # EM----
+EM_states <- tibble(state = c('Caracas', 'Maracaibo', 'La Guaira', 'Maracay', 'Pto. Ordaz'),
+                    lat = c(10.491, 10.6417, 10.6038, 10.2353, 8.2751),
+                    long = c(-66.902, -71.6295, -67.0303, -67.5911, -62.7677),
+                    exp = round(runif(5)*10000, 0)) %>% 
+    mutate(sa = round(exp*rgamma(5, 2)*10000, 0))
+
+EM_darksy_key <- Sys.getenv("darksky_api_key")
+
+EM_token <- create_token(
+    app = Sys.getenv("app_name"),
+    consumer_key = Sys.getenv("api_key"),
+    consumer_secret = Sys.getenv("api_secret_key"),
+    access_token = Sys.getenv("access_token"),
+    access_secret = Sys.getenv("access_token_secret"))
+
 # UI----
 ui <- shinyUI(
     dashboardPage(
@@ -83,8 +120,9 @@ ui <- shinyUI(
         
         # Sidebar----
         dashboardSidebar(
+            br(),
             tags$a(
-                   tags$img(src = "am-logo-white.png", height = 100, width = 200)),
+                   tags$img(src = "am-logo-white.png", height = 120, width = 200)),
             br(),
             br(),
             
@@ -93,18 +131,30 @@ ui <- shinyUI(
                 id = "tabs",
                 
                 menuItem("Motor Portfolio TPL", tabName = "TPL_motor", icon = icon("bar-chart-o")),
-                menuItem("Long-Term IRate Forecast", tabName = "iRate", icon = icon("th"))
+                menuItem("Long-Term IRate Forecast", tabName = "iRate", icon = icon("chart-area")),
+                menuItem("IBNR Development triangles", tabName = "ibnr", icon = icon("calendar-alt")),
+                menuItem("Emergency Monitor", tabName = "EM", icon = icon("exclamation"))
             ),
             
-            conditionalPanel(
-                condition = "input.tabs == 'TPL_motor'",
-                span(HTML(helpText_TPL), style = 'color:gray')
-            ),
+            br(),
+            actionBttn(
+                inputId = "doc",
+                label = " Docs",
+                color = "succes",
+                style = "jelly",
+                size = "sm",
+                icon = icon("file-signature"),
+                block = F)
             
-            conditionalPanel(
-                condition = "input.tabs == 'iRate'",
-                span(HTML(helpText_iRate), style = 'color:gray')
-            )
+            # conditionalPanel(
+            #     condition = "input.tabs == 'TPL_motor'",
+            #     span(HTML(helpText_TPL), style = 'color:gray')
+            # ),
+            # 
+            # conditionalPanel(
+            #     condition = "input.tabs == 'iRate'",
+            #     span(HTML(helpText_iRate), style = 'color:gray')
+            # )
             
         ),
         
@@ -227,28 +277,30 @@ ui <- shinyUI(
                                      selectInput('iRate_select_country', 'Select Country: ',
                                                  choices = iRate_country_choices,
                                                  selected = 'United States'),
-                                     fluidRow(
-                                         highchartOutput("iRate_heatmap", height = '500px') %>% withSpinner()
-                                         ),
-                                     fluidRow( 
-                                         br(),
-                                         highchartOutput("iRate_stl") %>% withSpinner()   
-                                         ),
-                                     fluidRow(
-                                         br(),
-                                         highchartOutput("iRate_diff_plot") %>% withSpinner(),
-                                         
-                                         fluidRow(
-                                             br(),
-                                             column(6,
-                                                    highchartOutput("iRate_ACF") %>% withSpinner()
-                                                    ),
-                                             column(6,
-                                                    highchartOutput("iRate_PACF") %>% withSpinner()
-                                                    )
-                                             )
+                                     tabBox(
+                                         side = "left", width  = 12, height = NULL,
+                                         selected = "Heatmap",
+                                         tabPanel("Heatmap",
+                                                  highchartOutput("iRate_heatmap", height = '500px') %>% withSpinner()
+                                                  ),
+                                         tabPanel("STL",
+                                                  highchartOutput("iRate_stl") %>% withSpinner()   
+                                                  ),
+                                         tabPanel("Diff",
+                                                  highchartOutput("iRate_diff_plot") %>% withSpinner() 
+                                                  ),
+                                         tabPanel("ACF",
+                                                  fluidRow(
+                                                      column(6,
+                                                             highchartOutput("iRate_ACF") %>% withSpinner()
+                                                             ),
+                                                      column(6,
+                                                             highchartOutput("iRate_PACF") %>% withSpinner()
+                                                             )
+                                                      )
+                                                  )
                                          )
-                                     ),
+                            ),
                             tabPanel('Modelling',
                                      br(),
                                      highchartOutput("iRate_agg_forecast") %>% withSpinner(),
@@ -269,22 +321,233 @@ ui <- shinyUI(
                                                        min = 1, max = 100, step = 10, value = 10)
                                            )
                                     ),
-                                # box(highchartOutput("iRate_inv_forecast") %>% withSpinner(), width = 12)
                                 highchartOutput('iRate_indv_forecast') %>% withSpinner()
+                                )
+                            )
+                        ),
+                # IBNR-----
+                tabItem("ibnr",
+                        tabsetPanel(
+                            tabPanel('Overview',
+                                     br(),
+                                     fluidRow(
+                                         tabBox(
+                                             side = "left", width  = 12, height = NULL,
+                                             selected = "Triangulo",
+                                             tabPanel("Triangulo", 
+                                                      radioButtons('ibnr_ovw_cum', 'Mostrar:',
+                                                                   choices = c('Acumulativo' = T,
+                                                                               'Discreto' = F),
+                                                                   selected = F,
+                                                                   inline = T),
+                                                      DT::dataTableOutput('ibnr_ovw_tri_table') %>% withSpinner()
+                                                      ),
+                                             tabPanel("Grafico",
+                                                      plotlyOutput('ibnr_ovw_plot') %>% withSpinner()
+                                                      )
+                                             )
+                                         )
+                                     ),
+                            
+                            tabPanel('ChainLadder',
+                                     br(),
+                                     fluidRow(
+                                         tabBox(
+                                             side = "left", width  = 12, height = NULL,
+                                             selected = "LinkRatios",
+                                             tabPanel("LinkRatios",
+                                                      DT::dataTableOutput('ibnr_cl_tri') ,
+                                                      # DT::dataTableOutput('ibnr_cl_tri_result')
+                                                      column(12,
+                                                             offset = 1,
+                                                             DT::dataTableOutput('ibnr_cl_tri_result'))
+                                                      ),
+                                             tabPanel("Resultados",
+                                                      DT::dataTableOutput('ibnr_cl_result')
+                                                      )
+                                             )
+                                         )
+                                     ),
+                            
+                            tabPanel('Mack',
+                                     br(),
+                                     fluidRow(
+                                         tabBox(
+                                             side = "left", width  = 12, height = NULL,
+                                             selected = "Resultado",
+                                             tabPanel("Resultado", 
+                                                      DT::dataTableOutput('ibnr_mack_result') %>% withSpinner()
+                                                      ),
+                                             tabPanel("Barras",
+                                                      plotlyOutput('ibnr_mack_bar') %>% withSpinner()
+                                                      ),
+                                             tabPanel("ResVSFitt",
+                                                      plotlyOutput('ibnr_mack_resvfit') %>% withSpinner(),
+                                                      plotlyOutput('ibnr_mack_resvsori') %>% withSpinner()
+                                                      ),
+                                             tabPanel("Forecast",
+                                                      plotlyOutput('ibnr_mack_ovw') %>% withSpinner()
+                                                      )
+                                             )
+                                         )
+                                     ),
+                            
+                            tabPanel('Bootstrap',
+                                     br(),
+                                     fluidRow(
+                                         tabBox(
+                                             side = "left", width  = 12, height = NULL,
+                                             selected = "Resultado",
+                                             tabPanel("Resultado", 
+                                                      DT::dataTableOutput('ibnr_boots_result')
+                                                      ),
+                                             tabPanel("Histo",
+                                                      plotlyOutput('ibnr_boots_histo')
+                                                      ),
+                                             tabPanel("ecdf",
+                                                      plotOutput('ibnr_boots_ecdf')
+                                                      ),
+                                             tabPanel("BoxPLot",
+                                                      plotlyOutput('ibnr_boots_ult'),
+                                                      plotlyOutput('ibnr_boots_ibnr')
+                                                      ),
+                                             tabPanel('Quantiles',
+                                                      DT::dataTableOutput('ibnr_boots_q'))
+                                             )
+                                         )
+                                     )
+                            )
+                        ),
+                # EM-----
+                tabItem("EM",
+                        tabsetPanel(
+                            tabPanel('Forecast',
+                                     br(),
+                                     fluidRow(
+                                         column(4, selectInput('EM_state',
+                                                               choices = EM_states$state,
+                                                               selected = 'Caracas',
+                                                               label = 'Seleccionar Estado')),
+                                         column(4, valueBoxOutput('EM_curr_exp', width  = 12)),
+                                         column(4, valueBoxOutput('EM_curr_SA', width  = 12))
+                                     ),
+                                     fluidRow(
+                                         column(3, valueBoxOutput('EM_curr_prob', width  = 12)),
+                                         column(3, valueBoxOutput('EM_curr_rain', width  = 12)),
+                                         column(3, valueBoxOutput('EM_curr_wind', width  = 12)),
+                                         column(3, valueBoxOutput('EM_curr_temp', width  = 12))
+                                     ),
+                                     fluidRow(
+                                         tabBox(
+                                             side = "left", width  = 12, height = NULL,
+                                             selected = "Hour",
+                                             tabPanel("Hour",
+                                                      highchartOutput('EM_hour_rain_plot') %>% withSpinner()
+                                             ),
+                                             tabPanel("Daily",
+                                                      highchartOutput('EM_day_rain_plot') %>% withSpinner()
+                                             )
+                                         )
+                                     ),
+                                     br(),
+                                     p("Powered by: ",
+                                       a("DarkSky", href = "https://darksky.net/dev"))
+                                     ),
+                            tabPanel('Twitter Monitor',
+                                     br(),
+                                     fluidRow(
+                                         column(4,
+                                                tabBox(
+                                                    side = "right", width  = 12, height = NULL,
+                                                    selected = "INAMEH",
+                                                    tabPanel("INAMEH", style = 'overflow-y: scroll;height:500px;',
+                                                             includeHTML("data/emergency-monitor/INAMEH_twt.html")
+                                                             ),
+                                                    tabPanel("Clima_Litoral", style = 'overflow-y: scroll;height:500px;',
+                                                             includeHTML("data/emergency-monitor/Clima_Litoral_twt.html")
+                                                             )
+                                                    )
+                                                ),
+                                         column(8,
+                                                fluidRow(
+                                                    fluidRow(
+                                                        column(4,
+                                                               textInput('EM_twt_region',
+                                                                         'Buscar Tweets en: ',
+                                                                         'Caracas',
+                                                                         placeholder = 'puede usar el operador OR')
+                                                               ),
+                                                        column(4,
+                                                               textInput('EM_twt_subject',
+                                                                         'sobre: ',
+                                                                         'lluvia OR tormenta',
+                                                                         placeholder = 'puede usar el operador OR')),
+                                                        column(3, 
+                                                               br(),
+                                                               actionBttn(
+                                                                   inputId = "EM_twt_go",
+                                                                   label = " Go!",
+                                                                   color = "primary",
+                                                                   style = "jelly",
+                                                                   icon = icon("twitter"),
+                                                                   block = TRUE)
+                                                               ),
+                                                        column(1)
+                                                    ),
+                                                    tabBox(
+                                                        side = "left", width  = 12, height = '510px',
+                                                        selected = "Time Line",
+                                                        tabPanel("Time Line",
+                                                                 boxPlus(
+                                                                     width = 12,
+                                                                     title = "Frecuencia de Tweets", 
+                                                                     closable = F, 
+                                                                     status = "primary", 
+                                                                     solidHeader = F, 
+                                                                     collapsible = F,
+                                                                     height = NULL,
+                                                                     enable_sidebar = TRUE,
+                                                                     sidebar_width = 25,
+                                                                     sidebar_start_open = F,
+                                                                     sidebar_content = tagList(
+                                                                         radioButtons('EM_twt_plot_time', 'Escala de agregacion:',
+                                                                                      choices = c('1 hora' = '1 hours',
+                                                                                                  '3 horas' = '3 hours',
+                                                                                                  '12 horas' = '12 hours',
+                                                                                                  '1 dia' = '24 hours'),
+                                                                                      selected = '3 hours',
+                                                                                      inline = F)
+                                                                         ),
+                                                                     plotlyOutput('EM_twt_lineplot') %>% withSpinner()
+                                                                     )
+                                                                 )
+                                                        )
+                                                    )
+                                                )
+                                         )
+                                     )
                             )
                         )
-                    
                 )
             )
-
         )
-    )
 )
 
 # Server----
 server <- function(input, output) {
     
+    # Docs----
+    observeEvent(input$doc, {
+        showModal(modalDialog(
+            title = "Important message",
+            size = 'l',
+            HTML(doc),
+            easyClose = TRUE
+        ))
+    })
+    
     #Reactives----
+    # TPL
     filter_TPL_claims <- reactive({
         req(input$drivAge_filter)
         req(input$vehGas_filter)
@@ -394,6 +657,7 @@ server <- function(input, output) {
 
     })
     
+    #iRate
     iRate_country <- reactive({
 
         complete_df <- i_rate %>% 
@@ -488,7 +752,257 @@ server <- function(input, output) {
         
     })
     
-    # ValueBox----
+    # IBNR
+    ibnr_ovw_tri <- reactive({
+        
+        if(input$ibnr_ovw_cum){
+            
+            tri <- ibnr_tri 
+            
+        } else {
+            
+            tri <- ibnr_tri %>% cum2incr()
+            
+        }
+         
+        tri %>% as.data.frame(na.rm = T) %>%
+            pivot_wider(names_from = 'dev', values_from = 'value')
+        
+    })
+    
+    ibnr_cl <- reactive({
+        
+        link <- ata(ibnr_tri)
+        
+        link_tri <- suppressWarnings(link %>% 
+            as.triangle() %>%
+            as.data.frame(na.rm = T) %>% 
+            pivot_wider(names_from = 'dev', values_from = 'value') %>% 
+            mutate_if(is.numeric, round, 2)
+        )
+        
+        result <- tibble(vwtd = c(attr(link, "vwtd")),
+               smpl =  c(attr(link, "smpl"))) %>%
+            mutate_if(is.numeric, round, 2) %>% 
+            t() %>% 
+            as.data.frame()
+        
+        linkratios <- c(attr(ata(ibnr_tri), "vwtd"), tail = 1.05)
+        LDF <- rev(cumprod(rev(linkratios)))
+        names(LDF) <- colnames(ibnr_tri) 
+        currentEval <- getLatestCumulative(ibnr_tri)
+        EstdUlt <- currentEval * rev(LDF)
+        Exhibit <- data.frame(currentEval, LDF = round(rev(LDF), 3), EstdUlt)
+        
+        list(link_tri = link_tri, result = result, exhibit = Exhibit)
+        
+    })
+    
+    ibnr_mack <- reactive({
+        
+        mack <- MackChainLadder(ibnr_tri, est.sigma = "Mack")
+        
+        mack_df <- summary(mack)$ByOrigin %>%
+            apply(2, round, 2) %>% 
+            as.data.frame() %>%
+            rownames_to_column('origin')
+            
+        
+        mack_bar <- mack_df %>%
+            dplyr::select(origin, Latest, IBNR) %>% 
+            pivot_longer(-origin, names_to = 'Ultimate', values_to = 'value') %>% 
+            ggplot(aes(x = origin, y = value, fill = Ultimate)) +
+            geom_bar(stat = "identity") +
+            theme_bw()
+        
+        mack_resvsfitt <- mack$Models %>% map(function(x){
+            stand.residuals <- x$residuals
+            fitted.values <- x$fitted.values
+            tibble(stand.residuals, fitted.values)
+        }) %>%
+            do.call(rbind.data.frame, .) %>% 
+            ggplot(aes(x = fitted.values, y = stand.residuals)) +
+            geom_point() +
+            geom_smooth(method = "glm")
+        
+        mack_resvsori <- mack$Models %>% map(function(x){
+            stand.residuals <- x$residuals
+            origin <- x$residuals %>% names()
+            tibble(stand.residuals, origin)
+        }) %>%
+            do.call(rbind.data.frame, .) %>%
+            ggplot(aes(x = origin, y = stand.residuals)) +
+            geom_point() +
+            geom_smooth(method = "glm")
+        
+        # Forecast plot
+        
+        .aux_mack_ovw <- mack$Triangle %>% 
+            as.data.frame(na.rm = T) %>% 
+            transmute(origin_dev = paste(origin, dev), type = 'latest')
+        
+        .error_mack_ovw <- mack$Mack.S.E %>% 
+            as.triangle() %>%  
+            as.data.frame(na.rm = T) %>%  
+            transmute(origin_dev = paste(origin, dev), error = value)
+        
+        mack_ovw <- mack$FullTriangle %>% 
+            as.data.frame(na.rm = T) %>%
+            mutate(origin_dev = paste(origin, dev)) %>% 
+            left_join(.aux_mack_ovw, by = 'origin_dev') %>%
+            left_join(.error_mack_ovw, by = 'origin_dev') %>%
+            mutate(type = type %>% replace_na('forecast')) %>% 
+            ggplot(aes(x = dev, y = value, color = type)) +
+            geom_point() +
+            geom_line() +
+            geom_errorbar(aes(ymin = value-error, ymax = value+error), width=.2,
+                          position=position_dodge(0.05)) +
+            facet_wrap( ~ origin, nrow = 3) +
+            theme_bw()
+        
+       list(mack = mack, mack_df = mack_df, mack_bar = mack_bar, mack_resvsfitt = mack_resvsfitt,
+             mack_resvsori = mack_resvsori, mack_ovw = mack_ovw)
+    })
+    
+    ibnr_boots <- reactive({
+        
+        boots <- BootChainLadder(ibnr_tri, R = 999, process.distr = "gamma")
+        
+        df <- summary(boots)$ByOrigin %>%
+            apply(2, round, 2) %>% 
+            as.data.frame() %>%
+            rownames_to_column('origin')
+        
+        histo <- boots$IBNR.Totals %>% 
+            as.data.frame() %>% 
+            setNames('IBNR') %>%
+            ggplot(aes(x = IBNR)) +
+            geom_histogram() +
+            theme_bw()
+        
+        ecdf <- boots$IBNR.Totals %>%
+            as.data.frame() %>% 
+            setNames('IBNR') %>%
+            ggplot(aes(IBNR)) +
+            stat_ecdf(geom = "step") +
+            theme_bw()
+        
+        boots_aux <- boots$Triangle %>% 
+            as.data.frame(na.rm = T) %>% 
+            pivot_wider(names_from = 'dev', values_from = 'value') %>% 
+            transmute(origin, latest = apply(.[,-1], 1, max, na.rm = T)) 
+        
+        ult <- boots$IBNR.ByOrigin %>% 
+            matrix(nrow = length(.[,,1]), byrow = F) %>%
+            t() %>% 
+            as.data.frame() %>%
+            setNames(boots$Triangle %>% as.data.frame() %>% .$origin %>% unique()) %>% 
+            pivot_longer(everything(), names_to = 'origin', values_to = 'value') %>% 
+            left_join(boots_aux, by = 'origin') %>%
+            mutate(value = value + latest) %>%
+            ggplot(aes(x = origin, y = value)) +
+            geom_boxplot()
+        
+       ibnr <-  boots$IBNR.ByOrigin %>% 
+            matrix(nrow = length(.[,,1]), byrow = F) %>%
+            t() %>% 
+            as.data.frame() %>%
+            setNames(boots$Triangle %>% as.data.frame() %>% .$origin %>% unique()) %>% 
+            pivot_longer(everything(), names_to = 'origin', values_to = 'value') %>% 
+            ggplot(aes(x = origin, y = value)) +
+            geom_boxplot()
+         
+        q <- quantile(boots, c(0.75,0.95,0.99, 0.995))$ByOrigin %>%
+            apply(2, round, 2) %>% 
+            as.data.frame() %>%
+            rownames_to_column('origin')
+        
+        list(df = df, histo = histo, ecdf = ecdf, ult = ult, ibnr = ibnr, q = q)
+        
+    })
+    
+    # EM
+    EM_weather <- reactive({
+        
+        df <- EM_states %>% filter(state == input$EM_state)
+        
+        url <- paste0('https://api.darksky.net/forecast/',
+                      EM_darksy_key, '/',
+                      df$lat, ',',
+                      df$long,
+                      '?lang=es&units=si')
+
+        apicall <- fromJSON(url)
+        
+        # validate(
+        #     need(!is.na(apicall), "No winning trades")
+        # )
+        
+        curr <- apicall$currently
+        hour <- apicall$hourly$data %>% 
+            mutate(time = as_datetime(time, tz = 'America/Caracas'))
+        day <- apicall$daily$data %>% 
+            mutate(time = as_datetime(time, tz = 'America/Caracas'))
+        
+        sbt_hour <- table(hour$summary) %>% which.max() %>% names()
+        
+        hourly_chart <- highchart() %>%
+            hc_title(text = 'Pronóstico de lluvia a 48h', align = 'left') %>% 
+            hc_subtitle(text = sbt_hour, align = 'left') %>%
+            hc_xAxis(categories = hour(hour$time)) %>% 
+            hc_yAxis_multiples(
+                list(title = list(text = "Prob"), lineWidth = 3, ceiling = 1),
+                list(title = list(text = "Ml/Hora"), showLastLabel = T, opposite = T)
+            ) %>% 
+            hc_add_series(hour$precipProbability, type = "line", yAxis = 0, name = 'Probabilidad') %>% 
+            hc_add_series(hour$precipIntensity, type = "column", yAxis = 1, name = 'Intensidad') %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
+        
+        sbt_day <- table(day$summary) %>% which.max() %>% names()
+        
+        daily_chart <- highchart() %>%
+            hc_title(text = 'Pronóstico de lluvia a 8d', align = 'left') %>% 
+            hc_subtitle(text = sbt_day, align = 'left') %>%
+            hc_xAxis(categories = date(day$time)) %>% 
+            hc_yAxis_multiples(
+                list(title = list(text = "Prob"), lineWidth = 3, ceiling = 1),
+                list(title = list(text = "Ml/Hora"), showLastLabel = T, opposite = T)
+            ) %>% 
+            hc_add_series(day$precipProbability, type = "line", yAxis = 0, name = 'Probabilidad') %>% 
+            hc_add_series(day$precipIntensity, type = "column", yAxis = 1, name = 'Intensidad')  %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
+        
+        list(state = df, curr = curr, hourly_chart = hourly_chart, daily_chart = daily_chart)
+        
+    })
+    
+    EM_twt_rest <- eventReactive(input$EM_twt_go, {
+        
+        query <- paste(input$EM_twt_region, input$EM_twt_subject, sep = ' ')
+        
+        twt <- tryCatch({
+            search_tweets(query, n = 2000, token = EM_token, include_rts = FALSE) %>% 
+                mutate(created_at = created_at - hours(4))
+            },
+            error = function(cond){
+                message('Conection Error')
+                return(FALSE)
+                })
+        
+        shiny::validate(
+            need(is.data.frame(twt), "Error de conexión, expere 10 segundos e intente nuevamente")
+        )
+        
+        list(twt = twt)
+        
+    })
+    
+    # Value & info Boxes----
+        # TPL
     output$TPL_amount_claims <- renderValueBox({
         
         value <- filter_TPL_claims()$claimAmount %>% sum(na.rm = T) %>% round(2) %>% format(big.mark = ',')
@@ -519,6 +1033,63 @@ server <- function(input, output) {
         )
     })
     
+        # EM
+    output$EM_curr_exp <- renderValueBox({
+        
+        exposure <- EM_weather()$state$exp
+        
+        valueBox('Expuestos', value = format(round(exposure, 0), big.mark = ',', nsmal = 0),
+                 icon = icon('signal', lib = 'font-awesome'), color = 'green')
+        
+    })
+    
+    output$EM_curr_SA <- renderValueBox({
+        
+        sa <- EM_weather()$state$sa
+        
+        valueBox('Exposición', value = format(round(sa, 0), big.mark = ',', nsmal = 0),
+                 icon = icon('dollar-sign', lib = 'font-awesome'), color = 'green')
+        
+    })
+    
+    output$EM_curr_prob <- renderInfoBox({
+        
+        p <- EM_weather()$curr$precipProbability
+        
+        valueBox('Prob. de Precipitación', value = sprintf("%s%%", format(round(p*100, 0), big.mark = ',', nsmal = 0)),
+                icon = icon('umbrella', lib = 'font-awesome'))
+        
+    })
+    
+    output$EM_curr_rain <- renderInfoBox({
+        
+        int <- round(EM_weather()$curr$precipIntensity, 2)
+        s <- EM_weather()$curr$summary
+        
+        valueBox(value = sprintf("%s Ml/hora", format(int, big.mark = ',', nsmal = 2)),
+                subtitle = 'Precipitación',
+                icon = icon('cloud', lib = 'font-awesome'))
+        
+    })
+    
+    output$EM_curr_wind <- renderInfoBox({
+        
+        w <- EM_weather()$curr$windSpeed
+
+        valueBox('Velocidad del Viento', value = sprintf("%s Mt/seg", format(w, big.mark = ',', nsmal = 2)),
+                icon = icon('bolt', lib = 'font-awesome'))
+        
+    })    
+    
+    output$EM_curr_temp <- renderInfoBox({
+        
+        temp <- EM_weather()$curr$temperature
+
+        valueBox('Temperatura', value = sprintf("%s Cº", format(temp, big.mark = ',', nsmal = 2)),
+                icon = icon('sun', lib = 'font-awesome'))
+        
+    })
+    
     # Plots----
     # TPL
     output$TPL_bar_drivAge <- renderHighchart({
@@ -528,7 +1099,10 @@ server <- function(input, output) {
         hchart(l, "column", hcaes(x = drivAge, y = value)) %>% 
             hc_xAxis(title = '') %>%
             hc_title(text = "Edad del Conductor") %>% 
-            hc_yAxis(title = list(text = TPL_list()$y_labels))
+            hc_yAxis(title = list(text = TPL_list()$y_labels)) %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
     })
     
     output$TPL_bar_vehBrand <- renderHighchart({
@@ -537,7 +1111,10 @@ server <- function(input, output) {
         
         hchart(l, "treemap", hcaes(x = vehBrand, value = value)) %>% 
             hc_xAxis(title = '') %>%
-            hc_title(text = "Marca de Vehiculo")
+            hc_title(text = "Marca de Vehiculo") %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
     })
     
     output$TPL_bar_vehGas <- renderHighchart({
@@ -547,7 +1124,10 @@ server <- function(input, output) {
         hchart(l, "column", hcaes(x = vehGas, y = value)) %>% 
             hc_xAxis(title = '') %>%
             hc_title(text = "Tipo de Vehiculo") %>% 
-            hc_yAxis(title = list(text = TPL_list()$y_labels))
+            hc_yAxis(title = list(text = TPL_list()$y_labels)) %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
     })
     
     output$TPL_bar_vehAge <- renderHighchart({
@@ -557,7 +1137,10 @@ server <- function(input, output) {
         hchart(l, "column", hcaes(x = vehAge, y = value)) %>% 
             hc_xAxis(title = '') %>%
             hc_title(text = "Año de Vehiculo") %>% 
-            hc_yAxis(title = list(text = TPL_list()$y_labels))
+            hc_yAxis(title = list(text = TPL_list()$y_labels)) %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
     })
     
     output$TPL_map <- renderHighchart({
@@ -570,7 +1153,10 @@ server <- function(input, output) {
                               dataLabels = list(enabled = TRUE, format = '{point.name}'),
                               borderColor = "#FAFAFA", borderWidth = 0.1,
                               tooltip = list(valueDecimals = 0, valuePrefix = "", valueSuffix = "")) %>%
-            hc_title(text = "Distribucion de siniestros por Region")
+            hc_title(text = "Distribucion de siniestros por Region") %>% 
+            hc_exporting(
+                enabled = TRUE
+            )
         
     })
     
@@ -706,6 +1292,118 @@ server <- function(input, output) {
         
     })
     
+    # IBNR
+    output$ibnr_ovw_plot <- renderPlotly({
+        
+        ovw <- ibnr_tri %>% as.data.frame(na.rm = T) %>% 
+            ggplot(aes(x = dev, y = value)) +
+            geom_point() +
+            geom_line() +
+            facet_wrap( ~ origin, nrow = 3) +
+            theme_bw()
+        
+        ggplotly(ovw) %>% 
+            config(displayModeBar = F)    
+        
+    })
+    
+    output$ibnr_mack_bar <- renderPlotly({
+        
+        p <- ibnr_mack()$mack_bar
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    output$ibnr_mack_resvfit <- renderPlotly({
+        
+        p <- ibnr_mack()$mack_resvsfitt
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+        
+    })
+    
+    output$ibnr_mack_resvsori <- renderPlotly({
+        
+        l <- ibnr_mack()
+        
+        ggplotly(l$mack_resvsori) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    output$ibnr_mack_ovw <- renderPlotly({
+        
+        p <- ibnr_mack()$mack_ovw
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    output$ibnr_boots_histo <- renderPlotly({
+        
+        p <- ibnr_boots()$histo
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    output$ibnr_boots_ecdf <- renderPlot({
+        
+        ibnr_boots()$ecdf
+        
+    })
+    
+    output$ibnr_boots_ult <- renderPlotly({
+        
+        p <- ibnr_boots()$ult
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    output$ibnr_boots_ibnr <- renderPlotly({
+        
+        p <- ibnr_boots()$ibnr
+        
+        ggplotly(p) %>% 
+            config(displayModeBar = F)
+        
+    })
+    
+    # EM
+    output$EM_hour_rain_plot <- renderHighchart({
+        
+        EM_weather()$hourly_chart
+    })
+    
+    output$EM_day_rain_plot <- renderHighchart({
+        
+        EM_weather()$daily_chart
+    })
+    
+    output$EM_twt_lineplot <- renderPlotly({
+        
+        t <- EM_twt_rest()$twt 
+        
+        p <- t %>% 
+            ts_plot(input$EM_twt_plot_time,  trim = 1) +
+            theme_minimal() +
+            theme(plot.title = ggplot2::element_text(face = "bold")) +
+            labs(
+                x = NULL, y = NULL,
+                caption = "\nFuente: Twitter's REST API via rtweet"
+            )
+        
+        ggplotly(p)
+    })
+    
     # DataTables-----
     # Detail Table TPL
     output$TPL_table <- DT::renderDataTable(
@@ -722,6 +1420,7 @@ server <- function(input, output) {
         )
     )
     
+    # iRate comparative forecast results
     output$iRate_comparative_table <- DT::renderDataTable(
         DT::datatable({iRate_country()$results},
                       options = list(dom = 't',
@@ -730,6 +1429,91 @@ server <- function(input, output) {
         )
     )
     
+    # Overview Triangle
+    output$ibnr_ovw_tri_table <- DT::renderDataTable(
+        DT::datatable({ibnr_ovw_tri()},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_ovw_tri())
+                      ),
+                      rownames = FALSE
+        )
+    )
+    
+    # Mack Result
+    output$ibnr_mack_result <- DT::renderDataTable(
+        DT::datatable({ibnr_mack()$mack_df},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_mack()$mack_df)
+                      ),
+                      rownames = FALSE
+        )
+    )
+        
+    # Boots Result
+    output$ibnr_boots_result <- DT::renderDataTable(
+        DT::datatable({ibnr_boots()$df},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_boots()$df)
+                      ),
+                      rownames = FALSE
+        )
+    )        
+
+        # Boots Q
+    output$ibnr_boots_q <- DT::renderDataTable(
+        DT::datatable({ibnr_boots()$q},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_boots()$q)
+                      ),
+                      rownames = FALSE
+        )
+    )
+    
+    # CL triangle
+    output$ibnr_cl_tri <- DT::renderDataTable(
+        DT::datatable({ibnr_cl()$link_tri},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_cl()$link_tri)
+                      ),
+                      rownames = FALSE
+        )
+    )
+
+    # CL results
+    output$ibnr_cl_tri_result <- DT::renderDataTable(
+        DT::datatable({ibnr_cl()$result},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_cl()$result)
+                      ),
+                      rownames = FALSE,
+                      colnames = rep("", ncol(ibnr_cl()$result))
+        )
+    )
+    
+    # CL results
+    output$ibnr_cl_result <- DT::renderDataTable(
+        DT::datatable({ibnr_cl()$exhibit},
+                      options = list(dom = 't',
+                                     columnDefs = list(list(className = 'dt-center', targets = '_all')),
+                                     ordering = F,
+                                     pageLength = nrow(ibnr_cl()$exhibit)
+                      ),
+                      rownames = FALSE
+        )
+    )
+
 }
 
 # Run the application 
