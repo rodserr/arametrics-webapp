@@ -54,34 +54,11 @@ vehGas_choices <- unique(TPL_claims$vehGas)
 vehAge_choices <- unique(TPL_claims$vehAge)
 vehBrand_choices <- unique(TPL_claims$vehBrand)
 
-helpText_TPL <- 'Este modulo muestra el performance de una cartera de Resposabilidad Civil Vehículos <br>
-<br>
-Despliega gráficos descriptivos con la opción de cambiar la variable a estudiar y muestra indicadores en base a los 
-inputs seleccionados <br>
-<br>
-Realiza una simulación de frecuencia y severidad de siniestros y despliega gráficos de barras condicionados a inputs de 
-retención de Reaseguro <br>
-<br>
-Muestra también una tabla con el detalle por póliza'
-
     # ts-InterestRate----
 i_rate <- read_csv('data/ts-interest-rate/long_term_interest_rates.csv') %>% 
     mutate(dt = as.yearmon(time))
 
 iRate_country_choices <- unique(i_rate$country)
-
-helpText_iRate <- 'Este modulo realiza el forecast de la tasa de interes a largo plazo del país seleccionado, con
-técnicas de series de tiempo, se trabaja con data mensual <br>
-<br>
-En el panel Overview se observa un Mapa de calor con las tasas agrupadas por Q de cada país disponible. 
-Se despliega también gráficos de descomposición de serie de tiempo STL -Seasonal and Trend decomposition using Loess- \n
-asi como gráficos de Autocorrelación y Autocorrelación Parcial <br>
-<br>
-Se modela la serie de tiempo en data de entrenamiento utilizando varias técnicas y 
-se realiza el forecast en la data de prueba, se muestra también un cuadro comparativo de los modelos <br>
-<br>
-Finalmente se pronostica en función al modelo seleccionado'
-
     # IBNR----
 data('MW2014')
 
