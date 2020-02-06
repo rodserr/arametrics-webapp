@@ -433,19 +433,19 @@ ui <- shinyUI(
                             tabPanel('Twitter Monitor',
                                      br(),
                                      fluidRow(
-                                         column(4,
+                                         column(6,
                                                 tabBox(
                                                     side = "right", width  = 12, height = NULL,
                                                     selected = "INAMEH",
-                                                    tabPanel("INAMEH", style = 'overflow-y: scroll;height:500px;',
+                                                    tabPanel("INAMEH", style = 'overflow-y: scroll; height:500px;',
                                                              includeHTML("data/emergency-monitor/INAMEH_twt.html")
                                                              ),
-                                                    tabPanel("Clima_Litoral", style = 'overflow-y: scroll;height:500px;',
+                                                    tabPanel("Clima_Litoral", style = 'overflow-y: scroll; height:500px;',
                                                              includeHTML("data/emergency-monitor/Clima_Litoral_twt.html")
                                                              )
                                                     )
                                                 ),
-                                         column(8,
+                                         column(6,
                                                 fluidRow(
                                                     fluidRow(
                                                         column(4,

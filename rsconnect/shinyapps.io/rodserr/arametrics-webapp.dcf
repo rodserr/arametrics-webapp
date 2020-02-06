@@ -5,8 +5,8 @@ account: rodserr
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1382497
-bundleId: 2596031
+bundleId: 2779938
 url: https://rodserr.shinyapps.io/arametrics-webapp/
-when: 1574029640.99169
+when: 1581004803.48814
 asMultiple: FALSE
 asStatic: FALSE
