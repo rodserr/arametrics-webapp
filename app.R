@@ -89,6 +89,14 @@ EM_token <- create_token(
     access_token = Sys.getenv("access_token"),
     access_secret = Sys.getenv("access_token_secret"))
 
+    # VG----
+vg_sales <- read.csv("data/Vg-sales/vgsales.csv") %>% 
+    clean_names() %>% 
+    filter(!year %in% c("N/A", "2017", "2020")) %>% 
+    select(-one_of(c('global_sales', 'rank'))) %>% 
+    pivot_longer(matches('sales'), names_to = 'region', values_to = 'sales') %>% 
+    mutate(region = region %>% str_remove('_sales') %>% as.factor())
+
 # UI----
 ui <- shinyUI(
     dashboardPage(
@@ -110,7 +118,8 @@ ui <- shinyUI(
                 menuItem("Motor Portfolio TPL", tabName = "TPL_motor", icon = icon("bar-chart-o")),
                 menuItem("Long-Term IRate Forecast", tabName = "iRate", icon = icon("chart-area")),
                 menuItem("IBNR Development triangles", tabName = "ibnr", icon = icon("calendar-alt")),
-                menuItem("Emergency Monitor", tabName = "EM", icon = icon("exclamation"))
+                menuItem("Emergency Monitor", tabName = "EM", icon = icon("exclamation")),
+                menuItem("VideoGames Sales", tabName = "VG", icon = icon("exclamation"))
             ),
             
             br(),
@@ -504,7 +513,47 @@ ui <- shinyUI(
                                          )
                                      )
                             )
+                        ),
+                # Video Games Sales-----
+                tabItem("VG",
+                        tabsetPanel(
+                            tabPanel('Overview',
+                                     br(),
+                                     fluidRow(
+                                         column(12,
+                                                boxPlus(
+                                                    width = 12,
+                                                    title = "Frecuencia de Tweets", 
+                                                    closable = F, 
+                                                    status = "primary", 
+                                                    solidHeader = F, 
+                                                    collapsible = F,
+                                                    height = NULL,
+                                                    enable_sidebar = TRUE,
+                                                    sidebar_width = 25,
+                                                    sidebar_start_open = T,
+                                                    sidebar_content = tagList(
+                                                        radioButtons('VG_year_plot_var', 'Variable:',
+                                                                     choices = c('publisher' = 'publisher',
+                                                                                 'genre' = 'genre',
+                                                                                 'platform' = 'patform'),
+                                                                     selected = 'publisher',
+                                                                     inline = F)
+                                                    ),
+                                                    plotlyOutput('VG_year_plot') %>% withSpinner()
+                                                )
+                                         )
+                                     ),
+                                     fluidRow(),
+                                     fluidRow(),
+                                     br()
+                            ),
+                            tabPanel('Sales Forecast',
+                                     br(),
+                                     fluidRow()
+                            )
                         )
+                )
                 )
             )
         )
@@ -524,7 +573,7 @@ server <- function(input, output) {
     })
     
     #Reactives----
-    # TPL
+    # TPL-----
     filter_TPL_claims <- reactive({
         req(input$drivAge_filter)
         req(input$vehGas_filter)
@@ -634,7 +683,7 @@ server <- function(input, output) {
 
     })
     
-    #iRate
+    #iRate-----
     iRate_country <- reactive({
 
         complete_df <- i_rate %>% 
@@ -729,7 +778,7 @@ server <- function(input, output) {
         
     })
     
-    # IBNR
+    # IBNR-----
     ibnr_ovw_tri <- reactive({
         
         if(input$ibnr_ovw_cum){
@@ -898,7 +947,7 @@ server <- function(input, output) {
         
     })
     
-    # EM
+    # EM-----
     EM_weather <- reactive({
         
         df <- EM_states %>% filter(state == input$EM_state)
@@ -975,6 +1024,14 @@ server <- function(input, output) {
         )
         
         list(twt = twt)
+        
+    })
+    
+    # VG----
+    VG_year_var <- reactive({
+        
+        TPL_claims %>%
+            filter()
         
     })
     
@@ -1068,7 +1125,7 @@ server <- function(input, output) {
     })
     
     # Plots----
-    # TPL
+    # TPL----
     output$TPL_bar_drivAge <- renderHighchart({
         
         l <- TPL_list()$bar_drivAge
@@ -1175,7 +1232,7 @@ server <- function(input, output) {
         
     })
     
-    # iRate
+    # iRate-----
     output$iRate_heatmap <- renderHighchart({
         
         hm_plot <- i_rate %>%
@@ -1269,7 +1326,7 @@ server <- function(input, output) {
         
     })
     
-    # IBNR
+    # IBNR----
     output$ibnr_ovw_plot <- renderPlotly({
         
         ovw <- ibnr_tri %>% as.data.frame(na.rm = T) %>% 
@@ -1354,7 +1411,7 @@ server <- function(input, output) {
         
     })
     
-    # EM
+    # EM-----
     output$EM_hour_rain_plot <- renderHighchart({
         
         EM_weather()$hourly_chart
@@ -1380,6 +1437,8 @@ server <- function(input, output) {
         
         ggplotly(p)
     })
+    
+    # VG----
     
     # DataTables-----
     # Detail Table TPL
