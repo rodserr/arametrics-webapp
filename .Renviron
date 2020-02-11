@@ -5,4 +5,4 @@ access_token = "157520630-1EJTeQMQwPTa2XfVNJpHQOAswCVV55CAW5F10E9q"
 access_token_secret = "CrX3JKGbYPMibezUgOSEg4YPIAaTjSLZdEb8xWyooIpRs"
 
 darksky_api_key = "c43f39df779150bbf85effe69ebc32e9"
-TWITTER_PAT=/home/rodrigo/.rtweet_token9.rds
+TWITTER_PAT=/home/rodrigo/.rtweet_token39.rds

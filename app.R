@@ -17,6 +17,8 @@ library(ChainLadder)
 library(plotly)
 library(jsonlite)
 library(rtweet)
+library(janitor)
+library(wesanderson)
 
 # Data----
     # Docs----
@@ -90,7 +92,7 @@ EM_token <- create_token(
     access_secret = Sys.getenv("access_token_secret"))
 
     # VG----
-vg_sales <- read.csv("data/Vg-sales/vgsales.csv") %>% 
+vg_sales <- read.csv("data/VG-sales/vgsales.csv") %>% 
     clean_names() %>% 
     filter(!year %in% c("N/A", "2017", "2020")) %>% 
     select(-one_of(c('global_sales', 'rank'))) %>% 
@@ -523,20 +525,20 @@ ui <- shinyUI(
                                          column(12,
                                                 boxPlus(
                                                     width = 12,
-                                                    title = "Frecuencia de Tweets", 
+                                                    title = "Historical Overview", 
                                                     closable = F, 
                                                     status = "primary", 
                                                     solidHeader = F, 
-                                                    collapsible = F,
+                                                    collapsible = T,
                                                     height = NULL,
-                                                    enable_sidebar = TRUE,
-                                                    sidebar_width = 25,
+                                                    enable_sidebar = T,
+                                                    sidebar_width = 10,
                                                     sidebar_start_open = T,
                                                     sidebar_content = tagList(
-                                                        radioButtons('VG_year_plot_var', 'Variable:',
+                                                        radioButtons('VG_year_radio_var', 'Variable:',
                                                                      choices = c('publisher' = 'publisher',
                                                                                  'genre' = 'genre',
-                                                                                 'platform' = 'patform'),
+                                                                                 'platform' = 'platform'),
                                                                      selected = 'publisher',
                                                                      inline = F)
                                                     ),
@@ -544,7 +546,68 @@ ui <- shinyUI(
                                                 )
                                          )
                                      ),
-                                     fluidRow(),
+                                     fluidRow(
+                                         column(9,
+                                                boxPlus(
+                                                    width = 12,
+                                                    title = "Top Publisher", 
+                                                    closable = F, 
+                                                    status = "primary", 
+                                                    solidHeader = F, 
+                                                    collapsible = T,
+                                                    height = NULL,
+                                                    enable_sidebar = T,
+                                                    sidebar_width = 15,
+                                                    sidebar_start_open = T,
+                                                    sidebar_content = tagList(
+                                                        sliderInput(
+                                                            "VG_pub_slider_var", 
+                                                            "Number of publisher:",
+                                                            min = 5, 
+                                                            max = 15, 
+                                                            value = 10
+                                                        ),
+                                                        radioButtons('VG_pub_radio_var', 'Variable:',
+                                                                     choices = c('region' = 'region',
+                                                                                 'genre' = 'genre',
+                                                                                 'platform' = 'platform'),
+                                                                     selected = 'genre',
+                                                                     inline = F)
+                                                    ),
+                                                    plotlyOutput('VG_pub_plot') %>% withSpinner()
+                                                )
+                                         ),
+                                         column(3,
+                                                boxPlus(
+                                                    width = 12,
+                                                    title = "Region", 
+                                                    closable = F, 
+                                                    status = "primary", 
+                                                    solidHeader = F, 
+                                                    collapsible = T,
+                                                    height = NULL,
+                                                    enable_sidebar = T,
+                                                    sidebar_width = 15,
+                                                    sidebar_start_open = T,
+                                                    sidebar_content = tagList(
+                                                        sliderInput(
+                                                            "VG_reg_slider_var", 
+                                                            "Number of publisher:",
+                                                            min = 5, 
+                                                            max = 15, 
+                                                            value = 10
+                                                        ),
+                                                        radioButtons('VG_pub_radio_var', 'Variable:',
+                                                                     choices = c('region' = 'region',
+                                                                                 'genre' = 'genre',
+                                                                                 'platform' = 'platform'),
+                                                                     selected = 'genre',
+                                                                     inline = F)
+                                                    ),
+                                                    plotlyOutput('VG_pub_plot') %>% withSpinner()
+                                                )
+                                         )
+                                         ),
                                      fluidRow(),
                                      br()
                             ),
@@ -572,7 +635,7 @@ server <- function(input, output) {
         ))
     })
     
-    #Reactives----
+ #Reactives----
     # TPL-----
     filter_TPL_claims <- reactive({
         req(input$drivAge_filter)
@@ -1030,12 +1093,27 @@ server <- function(input, output) {
     # VG----
     VG_year_var <- reactive({
         
-        TPL_claims %>%
-            filter()
+        svar <- c('year', 'sales', input$VG_year_radio_var)
         
+        vg_sales %>%
+            select(svar) %>% 
+            group_by_at(vars(-sales)) %>% 
+            summarize(revenue = sum(sales)) %>%
+            top_n(1)
     })
     
-    # Value & info Boxes----
+    VG_pub_var <- reactive({
+        
+        top_publisher_n <- vg_sales %>% count(publisher) %>% top_n(input$VG_pub_slider_var)
+        svar <- c('publisher', input$VG_pub_radio_var)
+        vg_sales %>% 
+            filter(publisher %in% top_publisher_n$publisher) %>% 
+            select(svar) %>%
+            group_by_all() %>% 
+            summarize(n = n())
+    })
+    
+ # Value & info Boxes----
         # TPL
     output$TPL_amount_claims <- renderValueBox({
         
@@ -1124,7 +1202,7 @@ server <- function(input, output) {
         
     })
     
-    # Plots----
+ # Plots----
     # TPL----
     output$TPL_bar_drivAge <- renderHighchart({
         
@@ -1439,8 +1517,44 @@ server <- function(input, output) {
     })
     
     # VG----
+    output$VG_year_plot <- renderPlotly({
+        
+        t <- VG_year_var()
+        
+        p <- t %>% 
+            ggplot(aes_string(x = 'year', y = 'revenue', fill = input$VG_year_radio_var)) + 
+            geom_bar(stat = "identity") +
+            scale_fill_manual(values = wes_palette('Darjeeling1', n = 10, type = 'continuous')) +
+            theme_minimal() +
+            labs(x = NULL, y = 'Revenue (MM)') +
+            theme(legend.position = "top",
+                  axis.text.x = element_text(angle = 20))
+            
+        ggplotly(p) %>% 
+            layout(legend = list(orientation = 'h', x = -0.02, y = 1.2)) %>% 
+            config(displayModeBar = F)
+    })
     
-    # DataTables-----
+    output$VG_pub_plot <- renderPlotly({
+        
+        t <- VG_pub_var()
+        n_color <- t %>% select(input$VG_pub_radio_var) %>% pull() %>% unique() %>% length()
+        
+        p <- t %>% 
+            ggplot(aes_string(x = 'publisher', y = 'n', fill = input$VG_pub_radio_var)) +
+            geom_col() + 
+            coord_flip() +
+            scale_fill_manual(values = wes_palette('Darjeeling1', n_color, type = 'continuous')) +
+            theme_minimal() +
+            labs(x = NULL, y = 'n') +
+            theme(legend.position = "top")
+        
+        ggplotly(p) %>% 
+            layout(legend = list(orientation = 'h', x = -100, y = 1.2, font = list(size = 7))) %>% 
+            config(displayModeBar = F)
+    })
+    
+ # DataTables-----
     # Detail Table TPL
     output$TPL_table <- DT::renderDataTable(
 
