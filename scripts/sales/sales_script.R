@@ -7,7 +7,7 @@ library(forecast)
 
 # Import----
 
-vg_sales <- read.csv("scripts/sales/vgsales.csv") %>% 
+vg_sales <- read.csv("data/VG-sales/vgsales.csv") %>% 
   clean_names()
 vg <- vg_sales %>% 
   filter(!year %in% c("N/A", "2017", "2020")) %>% 

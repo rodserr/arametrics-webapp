@@ -597,14 +597,14 @@ ui <- shinyUI(
                                                             max = 15, 
                                                             value = 10
                                                         ),
-                                                        radioButtons('VG_pub_radio_var', 'Variable:',
+                                                        radioButtons('VG_reg_radio_var', 'Variable:',
                                                                      choices = c('region' = 'region',
                                                                                  'genre' = 'genre',
                                                                                  'platform' = 'platform'),
                                                                      selected = 'genre',
                                                                      inline = F)
                                                     ),
-                                                    plotlyOutput('VG_pub_plot') %>% withSpinner()
+                                                    plotlyOutput('VG_reg_plot') %>% withSpinner()
                                                 )
                                          )
                                          ),
@@ -1096,7 +1096,7 @@ server <- function(input, output) {
         svar <- c('year', 'sales', input$VG_year_radio_var)
         
         vg_sales %>%
-            select(svar) %>% 
+            select(all_of(svar)) %>% 
             group_by_at(vars(-sales)) %>% 
             summarize(revenue = sum(sales)) %>%
             top_n(1)
@@ -1108,7 +1108,7 @@ server <- function(input, output) {
         svar <- c('publisher', input$VG_pub_radio_var)
         vg_sales %>% 
             filter(publisher %in% top_publisher_n$publisher) %>% 
-            select(svar) %>%
+            select(all_of(svar)) %>%
             group_by_all() %>% 
             summarize(n = n())
     })
